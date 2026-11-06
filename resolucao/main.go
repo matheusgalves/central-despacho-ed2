@@ -11,7 +11,7 @@
 // não impede que duas ambulâncias sigam para o mesmo chamado e ignora os
 // bloqueios da etapa 2. No cenário de estresse, a varredura linear estoura
 // o limite de tempo por turno.
-package main
+package resolucao
 
 import (
 	"bufio"
