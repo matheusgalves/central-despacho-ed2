@@ -15,10 +15,14 @@ func (ponto Ponto) manhattan(pontoB Ponto) int {
 	return abs(ponto.X-pontoB.X) + abs(ponto.Y-pontoB.Y)
 }
 
+func (chamado Chamado) ponto() Ponto {
+	return Ponto{X: chamado.X, Y: chamado.Y}
+}
+
 type No struct {
-	ponto Ponto
-	esq   *No
-	dir   *No
+	chamado Chamado
+	esq     *No
+	dir     *No
 }
 
 type KDTree struct {
@@ -27,23 +31,24 @@ type KDTree struct {
 
 const DIMENSOES = 2
 
-func (arvore *KDTree) buscaMaisProximo(consulta Ponto) (Ponto, bool) {
+// buscaMaisProximo devolve o chamado mais próximo (Manhattan) de consulta.
+// O segundo retorno é false se a árvore estiver vazia.
+func (arvore *KDTree) buscaMaisProximo(consulta Ponto) (Chamado, bool) {
 	melhor := buscaMaisProximoRecursivo(arvore.raiz, consulta, 0, nil)
 	if melhor == nil {
-		return Ponto{}, false
+		return Chamado{}, false
 	}
-	return melhor.ponto, true
+	return melhor.chamado, true
 }
 
-func (arvore *KDTree) insere(ponto Ponto) {
-	arvore.raiz = insereRecursivo(arvore.raiz, ponto, 0)
+func (arvore *KDTree) insere(chamado Chamado) {
+	arvore.raiz = insereRecursivo(arvore.raiz, chamado, 0)
 }
 
-func (arvore *KDTree) remove(ponto Ponto) {
-	arvore.raiz = removeRecursivo(arvore.raiz, ponto, 0)
+// remove retira o chamado de mesmo ID (a posição guia a descida).
+func (arvore *KDTree) remove(chamado Chamado) {
+	arvore.raiz = removeRecursivo(arvore.raiz, chamado, 0)
 }
-
-
 
 func buscaMaisProximoRecursivo(no *No, consulta Ponto, profundidade int, melhor *No) *No {
 	if no == nil {
@@ -51,13 +56,13 @@ func buscaMaisProximoRecursivo(no *No, consulta Ponto, profundidade int, melhor 
 	}
 
 	// 1. o nó atual é candidato?
-	if melhor == nil || no.ponto.manhattan(consulta) < melhor.ponto.manhattan(consulta) {
+	if melhor == nil || no.chamado.ponto().manhattan(consulta) < melhor.chamado.ponto().manhattan(consulta) {
 		melhor = no
 	}
 
 	// 2. desce primeiro pelo lado onde a consulta está
 	eixo := profundidade % DIMENSOES
-	diferenca := consulta.valorDoEixo(eixo) - no.ponto.valorDoEixo(eixo)
+	diferenca := consulta.valorDoEixo(eixo) - no.chamado.ponto().valorDoEixo(eixo)
 
 	proximo, oposto := no.esq, no.dir
 	if diferenca >= 0 {
@@ -68,52 +73,52 @@ func buscaMaisProximoRecursivo(no *No, consulta Ponto, profundidade int, melhor 
 
 	// 3. só visita o outro lado se o plano de corte estiver mais perto
 	// do que o melhor já encontrado
-	if abs(diferenca) < melhor.ponto.manhattan(consulta) {
+	if abs(diferenca) < melhor.chamado.ponto().manhattan(consulta) {
 		melhor = buscaMaisProximoRecursivo(oposto, consulta, profundidade+1, melhor)
 	}
 
 	return melhor
 }
 
-func insereRecursivo(no *No, ponto Ponto, profundidade int) *No {
+func insereRecursivo(no *No, chamado Chamado, profundidade int) *No {
 	if no == nil {
-		return &No{ponto: ponto}
+		return &No{chamado: chamado}
 	}
 
 	eixoAtual := profundidade % DIMENSOES
 
-	if ponto.valorDoEixo(eixoAtual) < no.ponto.valorDoEixo(eixoAtual) {
-		no.esq = insereRecursivo(no.esq, ponto, profundidade+1)
+	if chamado.ponto().valorDoEixo(eixoAtual) < no.chamado.ponto().valorDoEixo(eixoAtual) {
+		no.esq = insereRecursivo(no.esq, chamado, profundidade+1)
 	} else {
-		no.dir = insereRecursivo(no.dir, ponto, profundidade+1)
+		no.dir = insereRecursivo(no.dir, chamado, profundidade+1)
 	}
 
 	return no
 }
 
-func removeRecursivo(no *No, ponto Ponto, profundidade int) *No {
+func removeRecursivo(no *No, chamado Chamado, profundidade int) *No {
 	if no == nil {
 		return nil
 	}
 
 	eixoAtual := profundidade % DIMENSOES
 
-	if no.ponto == ponto {
+	if no.chamado.ID == chamado.ID {
 		if no.dir != nil {
 			minimo := acharMinimo(no.dir, eixoAtual, profundidade+1)
-			no.ponto = minimo.ponto
-			no.dir = removeRecursivo(no.dir, minimo.ponto, profundidade+1)
+			no.chamado = minimo.chamado
+			no.dir = removeRecursivo(no.dir, minimo.chamado, profundidade+1)
 		} else if no.esq != nil {
 			minimo := acharMinimo(no.esq, eixoAtual, profundidade+1)
-			no.ponto = minimo.ponto
-			no.esq = removeRecursivo(no.esq, minimo.ponto, profundidade+1)
+			no.chamado = minimo.chamado
+			no.esq = removeRecursivo(no.esq, minimo.chamado, profundidade+1)
 		} else {
 			return nil // folha
 		}
-	} else if ponto.valorDoEixo(eixoAtual) < no.ponto.valorDoEixo(eixoAtual) {
-		no.esq = removeRecursivo(no.esq, ponto, profundidade+1)
+	} else if chamado.ponto().valorDoEixo(eixoAtual) < no.chamado.ponto().valorDoEixo(eixoAtual) {
+		no.esq = removeRecursivo(no.esq, chamado, profundidade+1)
 	} else {
-		no.dir = removeRecursivo(no.dir, ponto, profundidade+1)
+		no.dir = removeRecursivo(no.dir, chamado, profundidade+1)
 	}
 
 	return no
@@ -127,8 +132,9 @@ func acharMinimo(no *No, eixo int, profundidade int) *No {
 	eixoAtual := profundidade % DIMENSOES
 
 	if eixoAtual == eixo {
-		if no.dir == nil {
-			return nil
+		// o mínimo só pode estar à esquerda; sem esquerda, é o próprio nó
+		if no.esq == nil {
+			return no
 		}
 		return acharMinimo(no.esq, eixo, profundidade+1)
 	}
@@ -144,7 +150,7 @@ func menorNo(a, b *No, eixo int) *No {
 	if b == nil {
 		return a
 	}
-	if b.ponto.valorDoEixo(eixo) < a.ponto.valorDoEixo(eixo) {
+	if b.chamado.ponto().valorDoEixo(eixo) < a.chamado.ponto().valorDoEixo(eixo) {
 		return b
 	}
 	return a
