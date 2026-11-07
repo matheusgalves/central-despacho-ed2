@@ -19,6 +19,10 @@ func (chamado Chamado) ponto() Ponto {
 	return Ponto{X: chamado.X, Y: chamado.Y}
 }
 
+func (ambulancia Ambulancia) ponto() Ponto {
+	return Ponto{X: ambulancia.X, Y: ambulancia.Y}
+}
+
 type No struct {
 	chamado Chamado
 	esq     *No
@@ -31,9 +35,10 @@ type KDTree struct {
 
 const DIMENSOES = 2
 
-// buscaMaisProximo devolve o chamado mais próximo (Manhattan) de consulta.
+// buscaMelhor devolve o chamado mais próximo (Manhattan) de consulta.
 // O segundo retorno é false se a árvore estiver vazia.
-func (arvore *KDTree) buscaMaisProximo(consulta Ponto) (Chamado, bool) {
+func (arvore *KDTree) buscaMelhor(consulta Ponto) (Chamado, bool) {
+	// por enquanto esse aqui só considera chamados mais perto
 	melhor := buscaMaisProximoRecursivo(arvore.raiz, consulta, 0, nil)
 	if melhor == nil {
 		return Chamado{}, false
@@ -111,7 +116,8 @@ func removeRecursivo(no *No, chamado Chamado, profundidade int) *No {
 		} else if no.esq != nil {
 			minimo := acharMinimo(no.esq, eixoAtual, profundidade+1)
 			no.chamado = minimo.chamado
-			no.esq = removeRecursivo(no.esq, minimo.chamado, profundidade+1)
+			no.dir = removeRecursivo(no.esq, minimo.chamado, profundidade+1)
+			no.esq = nil
 		} else {
 			return nil // folha
 		}

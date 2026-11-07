@@ -100,6 +100,34 @@ func main() {
 	}
 }
 
+func jogarTurno(turno int, ambulancias []Ambulancia) {
+
+	// para cada ambulancia
+	for _, ambulancia := range ambulancias {
+		movimento := "P"	
+		//se a ambulancia ta livre, mover em direção ao melhor chamado
+		if ambulancia.Livre {
+			melhor, temAlgumChamado := chamados.buscaMelhor(ambulancia.ponto())
+			
+			if temAlgumChamado {
+				movimento = direcao(ambulancia.X, ambulancia.Y, melhor.X, melhor.Y)
+			}
+		} else {
+			melhor := 0
+			// se a ambulancia nao ta livre, mover em direção ao hospital mais perto
+			for i, h := range hospitais {
+				if distancia(ambulancia.X, ambulancia.Y, h.X, h.Y) < distancia(ambulancia.X, ambulancia.Y, hospitais[melhor].X, hospitais[melhor].Y) {
+					melhor = i
+				}
+			}
+			movimento = direcao(ambulancia.X, ambulancia.Y, hospitais[melhor].X, hospitais[melhor].Y)
+		}
+		fmt.Fprintln(escritor, ambulancia.ID, movimento)
+	}
+	fmt.Fprintln(escritor, "FIM")
+	escritor.Flush()
+}
+
 func montaChamado(campos []string) Chamado {
 	return Chamado{
 		ID:    inteiro(campos[0]),
@@ -176,47 +204,15 @@ func lerInicio() {
 	lerCampos() // FIM
 }
 
-// removerPorID procura o chamado no slice e o remove, trocando-o pelo
-// último elemento. Custo: proporcional ao número de chamados abertos.
+// implementar
 func removerPorID(id int) {
 	return
 }
 
 // removerExpirados mantém só os chamados com prazo maior ou igual ao turno.
 func removerExpirados(turno int) {
-	vivos := chamados[:0]
-	for _, c := range chamados {
-		if c.Prazo >= turno {
-			vivos = append(vivos, c)
-		}
-	}
-	chamados = vivos
+	// implementar
+	return
 }
 
-func jogarTurno(turno int, ambulancias []Ambulancia) {
-	for _, a := range ambulancias {
-		mov := "P"
-		if a.Livre {
-			melhor := -1
-			for i, c := range chamados {
-				if melhor == -1 || distancia(a.X, a.Y, c.X, c.Y) < distancia(a.X, a.Y, chamados[melhor].X, chamados[melhor].Y) {
-					melhor = i
-				}
-			}
-			if melhor != -1 {
-				mov = direcao(a.X, a.Y, chamados[melhor].X, chamados[melhor].Y)
-			}
-		} else {
-			melhor := 0
-			for i, h := range hospitais {
-				if distancia(a.X, a.Y, h.X, h.Y) < distancia(a.X, a.Y, hospitais[melhor].X, hospitais[melhor].Y) {
-					melhor = i
-				}
-			}
-			mov = direcao(a.X, a.Y, hospitais[melhor].X, hospitais[melhor].Y)
-		}
-		fmt.Fprintln(escritor, a.ID, mov)
-	}
-	fmt.Fprintln(escritor, "FIM")
-	escritor.Flush()
-}
+
