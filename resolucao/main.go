@@ -107,10 +107,11 @@ func jogarTurno(turno int, ambulancias []Ambulancia) {
 		movimento := "P"	
 		//se a ambulancia ta livre, mover em direção ao melhor chamado
 		if ambulancia.Livre {
-			melhor, temAlgumChamado := chamados.buscaMelhor(ambulancia.ponto())
+			melhor, temAlgum := chamados.buscaMelhor(ambulancia.ponto())
 			
-			if temAlgumChamado {
+			if temAlgum {
 				movimento = direcao(ambulancia.X, ambulancia.Y, melhor.X, melhor.Y)
+				melhor.AmbulanciaACaminho = true // considerar isso na lógica
 			}
 		} else {
 			melhor := 0
