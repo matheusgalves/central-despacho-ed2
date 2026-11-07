@@ -212,7 +212,7 @@ func jogarTurno(turno int, ambulancias []Ambulancia) {
 		if alvo.id == 0 {
 			continue
 		}
-		posicao := Ponto{X: a.X, Y: a.Y}
+		posicao := a.ponto()
 		alcancavel := chamadoAlcancavel(turno, alvo.prazo, posicao.manhattan(alvo.ponto))
 		if !a.Livre || !alcancavel || !chamadosPorID.contem(alvo.id) {
 			liberarAlvo(a.ID)
@@ -224,7 +224,7 @@ func jogarTurno(turno int, ambulancias []Ambulancia) {
 		if a.Livre {
 			alvo := alvos[a.ID]
 			if alvo.id == 0 {
-				chamado := chamados.buscaMaisProximo(Ponto{X: a.X, Y: a.Y}, turno)
+				chamado := chamados.buscaMelhor(a.ponto(), turno)
 				if chamado != nil {
 					chamado.AmbulanciaACaminho = true
 					alvo = alvoAmbulancia{id: chamado.ID, ponto: chamado.ponto(), prazo: chamado.Prazo}

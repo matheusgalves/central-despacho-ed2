@@ -19,6 +19,10 @@ func (chamado Chamado) ponto() Ponto {
 	return Ponto{X: chamado.X, Y: chamado.Y}
 }
 
+func (ambulancia Ambulancia) ponto() Ponto {
+	return Ponto{X: ambulancia.X, Y: ambulancia.Y}
+}
+
 type No struct {
 	chamado Chamado
 	esq     *No
@@ -31,9 +35,9 @@ type KDTree struct {
 
 const DIMENSOES = 2
 
-// buscaMaisProximo devolve o chamado alcançável e sem reserva mais próximo.
+// buscaMelhor devolve o chamado alcançável e sem reserva mais próximo.
 // O ponteiro permite reservar o chamado antes da próxima consulta.
-func (arvore *KDTree) buscaMaisProximo(consulta Ponto, turno int) *Chamado {
+func (arvore *KDTree) buscaMelhor(consulta Ponto, turno int) *Chamado {
 	melhor := buscaMaisProximoRecursivo(arvore.raiz, consulta, turno, 0, nil)
 	if melhor == nil {
 		return nil
