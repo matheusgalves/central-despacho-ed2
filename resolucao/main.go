@@ -1,17 +1,5 @@
-// Bot ingênuo: ponto de partida do trabalho prático.
-//
-// Este bot implementa o protocolo inteiro e joga de forma simples:
-//
-//   - guarda os chamados abertos num slice;
-//   - a cada turno, cada ambulância livre procura, por varredura linear,
-//     o chamado mais próximo e anda na direção dele;
-//   - cada ambulância ocupada anda na direção do hospital mais próximo.
-//
-// Ele não verifica se o chamado ainda pode ser alcançado dentro do prazo,
-// não impede que duas ambulâncias sigam para o mesmo chamado e ignora os
-// bloqueios da etapa 2. No cenário de estresse, a varredura linear estoura
-// o limite de tempo por turno.
-package resolucao
+// Bot da etapa 1: despacha ambulâncias na grade aberta.
+package main
 
 import (
 	"bufio"
@@ -39,12 +27,21 @@ type Hospital struct {
 	X, Y int
 }
 
+type alvoAmbulancia struct {
+	id    int // zero indica que a ambulância não tem alvo
+	ponto Ponto
+	prazo int
+}
+
 var (
 	leitor   *bufio.Scanner
 	escritor *bufio.Writer
 
-	hospitais []Hospital
-	chamados  KDTree
+	hospitais     []Hospital
+	chamados      KDTree
+	chamadosPorID hashChamados
+	expiraEm      [][]int
+	alvos         []alvoAmbulancia
 )
 
 func main() {
@@ -65,17 +62,19 @@ func main() {
 
 		novosChamados := inteiro(lerCampos()[1]) // CHAMADOS n
 
-		// inserir novos chamados na árvore
 		for i := 0; i < novosChamados; i++ {
-			chamados.insere(montaChamado(lerCampos()))
-			// talvez inserir na tabela hash também, para consultas por id
+			chamado := montaChamado(lerCampos())
+			chamados.insere(chamado)
+			chamadosPorID.insere(chamado.ID, chamado.ponto())
+			if chamado.Prazo < len(expiraEm) {
+				expiraEm[chamado.Prazo] = append(expiraEm[chamado.Prazo], chamado.ID)
+			}
 		}
 
 		chamadosRecolhidos := inteiro(lerCampos()[1]) // RECOLHIDOS r
 		for i := 0; i < chamadosRecolhidos; i++ {
 			idChamado := inteiro(lerCampos()[0])
 
-			// implementar essa, buscar o nó na tabela hash por id e chamar chamados.remove
 			removerPorID(idChamado)
 		}
 
@@ -136,12 +135,14 @@ func inteiro(s string) int {
 	return v
 }
 
+// TODO: ETAPA 2 - Ajustar para considerar bloqueios
 func distancia(x1, y1, x2, y2 int) int {
 	return abs(x1-x2) + abs(y1-y2)
 }
 
 // direcao devolve o movimento que aproxima (x, y) de (alvoX, alvoY),
 // andando primeiro na horizontal.
+// TODO: ETAPA 2 - Pensar em como otimizar para gerar o melhor caminho
 func direcao(x, y, alvoX, alvoY int) string {
 	switch {
 	case x < alvoX:
@@ -156,16 +157,17 @@ func direcao(x, y, alvoX, alvoY int) string {
 	return "P"
 }
 
-// lerInicio lê a mensagem de início. Este bot só usa os hospitais; os
-// bloqueios são lidos e descartados.
+// lerInicio lê a mensagem de início e prepara o estado da partida.
 func lerInicio() {
-	lerCampos() // INICIO largura altura turnos limite_turno limite_preparo equipe num_equipes
+	inicio := lerCampos() // INICIO largura altura turnos limite_turno limite_preparo equipe num_equipes
+	expiraEm = make([][]int, inteiro(inicio[3])+1)
 	h := inteiro(lerCampos()[1])
 	for i := 0; i < h; i++ {
 		c := lerCampos()
 		hospitais = append(hospitais, Hospital{inteiro(c[0]), inteiro(c[1])})
 	}
 	k := inteiro(lerCampos()[1])
+	alvos = make([]alvoAmbulancia, k)
 	for i := 0; i < k; i++ {
 		lerCampos() // id x y
 	}
@@ -176,38 +178,65 @@ func lerInicio() {
 	lerCampos() // FIM
 }
 
-// removerPorID procura o chamado no slice e o remove, trocando-o pelo
-// último elemento. Custo: proporcional ao número de chamados abertos.
+// removerPorID usa as coordenadas da hash para localizar o chamado na árvore.
 func removerPorID(id int) {
-	return
+	ponto, encontrado := chamadosPorID.retira(id)
+	if !encontrado {
+		return
+	}
+	chamados.remove(Chamado{ID: id, X: ponto.X, Y: ponto.Y})
 }
 
-// removerExpirados mantém só os chamados com prazo maior ou igual ao turno.
+// removerExpirados processa o lote que venceu ao fim do turno anterior.
 func removerExpirados(turno int) {
-	vivos := chamados[:0]
-	for _, c := range chamados {
-		if c.Prazo >= turno {
-			vivos = append(vivos, c)
-		}
+	prazoVencido := turno - 1
+	for _, id := range expiraEm[prazoVencido] {
+		removerPorID(id)
 	}
-	chamados = vivos
+	expiraEm[prazoVencido] = nil
+}
+
+// liberarAlvo encerra a reserva, mesmo se o chamado já tiver saído da árvore.
+func liberarAlvo(idAmbulancia int) {
+	alvo := alvos[idAmbulancia]
+	if chamado := chamados.buscaPorID(alvo.id, alvo.ponto); chamado != nil {
+		chamado.AmbulanciaACaminho = false
+	}
+	alvos[idAmbulancia] = alvoAmbulancia{}
 }
 
 func jogarTurno(turno int, ambulancias []Ambulancia) {
+	// Libera todos os alvos inválidos antes de distribuir os novos.
+	for _, a := range ambulancias {
+		alvo := alvos[a.ID]
+		if alvo.id == 0 {
+			continue
+		}
+		posicao := Ponto{X: a.X, Y: a.Y}
+		alcancavel := chamadoAlcancavel(turno, alvo.prazo, posicao.manhattan(alvo.ponto))
+		if !a.Livre || !alcancavel || !chamadosPorID.contem(alvo.id) {
+			liberarAlvo(a.ID)
+		}
+	}
+
 	for _, a := range ambulancias {
 		mov := "P"
 		if a.Livre {
-			melhor := -1
-			for i, c := range chamados {
-				if melhor == -1 || distancia(a.X, a.Y, c.X, c.Y) < distancia(a.X, a.Y, chamados[melhor].X, chamados[melhor].Y) {
-					melhor = i
+			alvo := alvos[a.ID]
+			if alvo.id == 0 {
+				chamado := chamados.buscaMaisProximo(Ponto{X: a.X, Y: a.Y}, turno)
+				if chamado != nil {
+					chamado.AmbulanciaACaminho = true
+					alvo = alvoAmbulancia{id: chamado.ID, ponto: chamado.ponto(), prazo: chamado.Prazo}
+					alvos[a.ID] = alvo
 				}
 			}
-			if melhor != -1 {
-				mov = direcao(a.X, a.Y, chamados[melhor].X, chamados[melhor].Y)
+			if alvo.id != 0 {
+				mov = direcao(a.X, a.Y, alvo.ponto.X, alvo.ponto.Y)
 			}
 		} else {
 			melhor := 0
+			//TODO: ETAPA 1 - Armazenar hospital mais próximo
 			for i, h := range hospitais {
 				if distancia(a.X, a.Y, h.X, h.Y) < distancia(a.X, a.Y, hospitais[melhor].X, hospitais[melhor].Y) {
 					melhor = i
