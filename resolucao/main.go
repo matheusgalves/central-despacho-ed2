@@ -22,10 +22,11 @@ import (
 )
 
 type Chamado struct {
-	ID    int
-	X, Y  int
-	Valor int
-	Prazo int
+	ID                 int
+	X, Y               int
+	Valor              int
+	Prazo              int
+	AmbulanciaACaminho bool
 }
 
 type Ambulancia struct {
@@ -43,8 +44,80 @@ var (
 	escritor *bufio.Writer
 
 	hospitais []Hospital
-	chamados  []Chamado
+	chamados  KDTree
 )
+
+func main() {
+	leitor = bufio.NewScanner(os.Stdin)
+	leitor.Buffer(make([]byte, 1<<16), 1<<20)
+	escritor = bufio.NewWriter(os.Stdout)
+
+	lerInicio()
+	fmt.Fprintln(escritor, "PRONTO")
+	escritor.Flush()
+
+	for {
+		c := lerCampos() // TURNO t
+		if c == nil {
+			return // fim da partida
+		}
+		turno := inteiro(c[1])
+
+		novosChamados := inteiro(lerCampos()[1]) // CHAMADOS n
+
+		// inserir novos chamados na árvore
+		for i := 0; i < novosChamados; i++ {
+			chamados.insere(montaChamado(lerCampos()))
+			// talvez inserir na tabela hash também, para consultas por id
+		}
+
+		chamadosRecolhidos := inteiro(lerCampos()[1]) // RECOLHIDOS r
+		for i := 0; i < chamadosRecolhidos; i++ {
+			idChamado := inteiro(lerCampos()[0])
+
+			// implementar essa, buscar o nó na tabela hash por id e chamar chamados.remove
+			removerPorID(idChamado)
+		}
+
+		removerExpirados(turno)
+
+		// é mais simples atualizar as ambulancias 1x por turno
+		ambulanciasServidor := inteiro(lerCampos()[1]) // AMBULANCIAS k
+		ambulancias := make([]Ambulancia, ambulanciasServidor)
+
+		for i := 0; i < ambulanciasServidor; i++ {
+			ambulancias[i] = montaAmbulancia(lerCampos())
+		}
+
+		placar := inteiro(lerCampos()[1]) // PLACAR
+		for i := 0; i < placar; i++ {
+			lerCampos()
+		}
+
+		lerCampos() // FIM
+
+		jogarTurno(turno, ambulancias)
+	}
+}
+
+func montaChamado(campos []string) Chamado {
+	return Chamado{
+		ID:    inteiro(campos[0]),
+		X:     inteiro(campos[1]),
+		Y:     inteiro(campos[2]),
+		Valor: inteiro(campos[3]),
+		Prazo: inteiro(campos[4]),
+	}
+}
+
+func montaAmbulancia(campos []string) Ambulancia {
+	return Ambulancia{
+		ID:    inteiro(campos[0]),
+		X:     inteiro(campos[1]),
+		Y:     inteiro(campos[2]),
+		Livre: campos[3] == "LIVRE",
+	}
+}
 
 // lerCampos lê a próxima linha da entrada e a divide em campos.
 // Devolve nil quando a entrada termina.
@@ -62,8 +135,6 @@ func inteiro(s string) int {
 	}
 	return v
 }
-
-
 
 func distancia(x1, y1, x2, y2 int) int {
 	return abs(x1-x2) + abs(y1-y2)
@@ -108,13 +179,7 @@ func lerInicio() {
 // removerPorID procura o chamado no slice e o remove, trocando-o pelo
 // último elemento. Custo: proporcional ao número de chamados abertos.
 func removerPorID(id int) {
-	for i := range chamados {
-		if chamados[i].ID == id {
-			chamados[i] = chamados[len(chamados)-1]
-			chamados = chamados[:len(chamados)-1]
-			return
-		}
-	}
+	return
 }
 
 // removerExpirados mantém só os chamados com prazo maior ou igual ao turno.
@@ -154,49 +219,4 @@ func jogarTurno(turno int, ambulancias []Ambulancia) {
 	}
 	fmt.Fprintln(escritor, "FIM")
 	escritor.Flush()
-}
-
-func main() {
-	leitor = bufio.NewScanner(os.Stdin)
-	leitor.Buffer(make([]byte, 1<<16), 1<<20)
-	escritor = bufio.NewWriter(os.Stdout)
-
-	lerInicio()
-	fmt.Fprintln(escritor, "PRONTO")
-	escritor.Flush()
-
-	for {
-		c := lerCampos() // TURNO t
-		if c == nil {
-			return // fim da partida
-		}
-		turno := inteiro(c[1])
-
-		n := inteiro(lerCampos()[1]) // CHAMADOS n
-		for i := 0; i < n; i++ {
-			c := lerCampos()
-			chamados = append(chamados, Chamado{inteiro(c[0]), inteiro(c[1]), inteiro(c[2]), inteiro(c[3]), inteiro(c[4])})
-		}
-
-		r := inteiro(lerCampos()[1]) // RECOLHIDOS r
-		for i := 0; i < r; i++ {
-			removerPorID(inteiro(lerCampos()[0]))
-		}
-		removerExpirados(turno)
-
-		k := inteiro(lerCampos()[1]) // AMBULANCIAS k
-		ambulancias := make([]Ambulancia, k)
-		for i := 0; i < k; i++ {
-			c := lerCampos()
-			ambulancias[i] = Ambulancia{inteiro(c[0]), inteiro(c[1]), inteiro(c[2]), c[3] == "LIVRE"}
-		}
-
-		e := inteiro(lerCampos()[1]) // PLACAR e
-		for i := 0; i < e; i++ {
-			lerCampos()
-		}
-		lerCampos() // FIM
-
-		jogarTurno(turno, ambulancias)
-	}
 }
