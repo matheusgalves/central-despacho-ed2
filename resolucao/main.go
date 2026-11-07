@@ -63,12 +63,7 @@ func inteiro(s string) int {
 	return v
 }
 
-func abs(v int) int {
-	if v < 0 {
-		return -v
-	}
-	return v
-}
+
 
 func distancia(x1, y1, x2, y2 int) int {
 	return abs(x1-x2) + abs(y1-y2)

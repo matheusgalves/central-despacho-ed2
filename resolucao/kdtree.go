@@ -44,6 +44,7 @@ func (arvore *KDTree) remove(ponto Ponto) {
 }
 
 
+
 func buscaMaisProximoRecursivo(no *No, consulta Ponto, profundidade int, melhor *No) *No {
 	if no == nil {
 		return melhor
@@ -149,17 +150,9 @@ func menorNo(a, b *No, eixo int) *No {
 	return a
 }
 
-// Busca procura um valor descendo por um único caminho: em cada nó, a
-// comparação descarta uma das duas subárvores inteiras.
-// func Busca(a *No, procurado int) bool {
-// 	if a == nil {
-// 		return false
-// 	}
-// 	if procurado < a.Info {
-// 		return Busca(a.esq, procurado)
-// 	}
-// 	if procurado > a.Info {
-// 		return Busca(a.dir, procurado)
-// 	}
-// 	return true
-// }
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
