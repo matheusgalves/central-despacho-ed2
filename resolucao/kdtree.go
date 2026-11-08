@@ -23,6 +23,10 @@ func (ambulancia Ambulancia) ponto() Ponto {
 	return Ponto{X: ambulancia.X, Y: ambulancia.Y}
 }
 
+func (hospital Hospital) ponto() Ponto {
+	return Ponto{X: hospital.X, Y: hospital.Y}
+}
+
 type No struct {
 	chamado Chamado
 	esq     *No
@@ -43,22 +47,6 @@ func (arvore *KDTree) buscaMelhor(consulta Ponto, turno int) *Chamado {
 		return nil
 	}
 	return &melhor.chamado
-}
-
-func (arvore *KDTree) buscaPorID(id int, ponto Ponto) *Chamado {
-	no := arvore.raiz
-	for profundidade := 0; no != nil; profundidade++ {
-		if no.chamado.ID == id {
-			return &no.chamado
-		}
-		eixo := profundidade % DIMENSOES
-		if ponto.valorDoEixo(eixo) < no.chamado.ponto().valorDoEixo(eixo) {
-			no = no.esq
-		} else {
-			no = no.dir
-		}
-	}
-	return nil
 }
 
 func chamadoAlcancavel(turno, prazo, distancia int) bool {

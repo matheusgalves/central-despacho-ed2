@@ -27,21 +27,16 @@ type Hospital struct {
 	X, Y int
 }
 
-type alvoAmbulancia struct {
-	id    int // zero indica que a ambulância não tem alvo
-	ponto Ponto
-	prazo int
-}
-
 var (
 	leitor   *bufio.Scanner
 	escritor *bufio.Writer
 
-	hospitais     []Hospital
-	chamados      KDTree
+	hospitais      []Hospital
+	chamadosComuns KDTree
+	chamadosGraves KDTree
+
 	chamadosPorID hashChamados
 	expiraEm      [][]int
-	alvos         []alvoAmbulancia
 )
 
 func main() {
@@ -64,8 +59,15 @@ func main() {
 
 		for i := 0; i < novosChamados; i++ {
 			chamado := montaChamado(lerCampos())
-			chamados.insere(chamado)
+
+			if chamadoEhGrave(chamado) {
+				chamadosGraves.insere(chamado)
+			} else {
+				chamadosComuns.insere(chamado)
+			}
+
 			chamadosPorID.insere(chamado.ID, chamado.ponto())
+
 			if chamado.Prazo < len(expiraEm) {
 				expiraEm[chamado.Prazo] = append(expiraEm[chamado.Prazo], chamado.ID)
 			}
@@ -97,6 +99,27 @@ func main() {
 
 		jogarTurno(turno, ambulancias)
 	}
+}
+
+func jogarTurno(turno int, ambulancias []Ambulancia) {
+	for _, ambulancia := range ambulancias {
+		mov := "P"
+		if ambulancia.Livre {
+			melhorChamadoComum := chamadosComuns.buscaMelhor(ambulancia.ponto(), turno)
+			melhorChamadoGrave := chamadosGraves.buscaMelhor(ambulancia.ponto(), turno)
+
+			escolhido := melhorDosMelhores(melhorChamadoComum, melhorChamadoGrave, ambulancia)
+			if escolhido != nil {
+				mov = direcao(ambulancia.X, ambulancia.Y, escolhido.X, escolhido.Y)
+			}
+		} else {
+			hospital := hospitalMaisProximo(ambulancia.ponto())
+			mov = direcao(ambulancia.X, ambulancia.Y, hospital.X, hospital.Y)
+		}
+		fmt.Fprintln(escritor, ambulancia.ID, mov)
+	}
+	fmt.Fprintln(escritor, "FIM")
+	escritor.Flush()
 }
 
 func montaChamado(campos []string) Chamado {
@@ -167,7 +190,6 @@ func lerInicio() {
 		hospitais = append(hospitais, Hospital{inteiro(c[0]), inteiro(c[1])})
 	}
 	k := inteiro(lerCampos()[1])
-	alvos = make([]alvoAmbulancia, k)
 	for i := 0; i < k; i++ {
 		lerCampos() // id x y
 	}
@@ -178,74 +200,77 @@ func lerInicio() {
 	lerCampos() // FIM
 }
 
-// removerPorID usa as coordenadas da hash para localizar o chamado na árvore.
+// removerPorID usa as coordenadas da hash para localizar o chamado na árvore
 func removerPorID(id int) {
 	ponto, encontrado := chamadosPorID.retira(id)
 	if !encontrado {
 		return
 	}
-	chamados.remove(Chamado{ID: id, X: ponto.X, Y: ponto.Y})
+	chamadosGraves.remove(Chamado{ID: id, X: ponto.X, Y: ponto.Y})
+	chamadosComuns.remove(Chamado{ID: id, X: ponto.X, Y: ponto.Y})
 }
 
 // removerExpirados processa o lote que venceu ao fim do turno anterior.
+// O ID sempre sai da hash. Da árvore, só os graves são removidos de fato:
+// a árvore de graves é pequena (remover é barato) e, cheia de mortos, faria
+// a busca sem candidato percorrer milhares de nós. Os comuns vencidos ficam
+// na árvore (remoção preguiçosa): a busca já os descarta pelo prazo, e
+// remover da árvore grande de comuns custava caro.
 func removerExpirados(turno int) {
 	prazoVencido := turno - 1
 	for _, id := range expiraEm[prazoVencido] {
-		removerPorID(id)
+		if ponto, encontrado := chamadosPorID.retira(id); encontrado {
+			// se o chamado era comum, remove não acha o ID e não faz nada
+			chamadosGraves.remove(Chamado{ID: id, X: ponto.X, Y: ponto.Y})
+		}
 	}
 	expiraEm[prazoVencido] = nil
 }
 
-// liberarAlvo encerra a reserva, mesmo se o chamado já tiver saído da árvore.
-func liberarAlvo(idAmbulancia int) {
-	alvo := alvos[idAmbulancia]
-	if chamado := chamados.buscaPorID(alvo.id, alvo.ponto); chamado != nil {
-		chamado.AmbulanciaACaminho = false
+// melhorDosMelhores escolhe entre o melhor chamado comum e o melhor grave pela
+// nota. Qualquer um dos dois pode ser nil; devolve nil se ambos forem.
+func melhorDosMelhores(chamadoComum, chamadoGrave *Chamado, ambulancia Ambulancia) *Chamado {
+	if chamadoComum == nil {
+		return chamadoGrave
 	}
-	alvos[idAmbulancia] = alvoAmbulancia{}
+	if chamadoGrave == nil {
+		return chamadoComum
+	}
+
+	if calculaNota(*chamadoGrave, ambulancia) >= calculaNota(*chamadoComum, ambulancia) {
+		return chamadoGrave
+	}
+
+	return chamadoComum
 }
 
-func jogarTurno(turno int, ambulancias []Ambulancia) {
-	// Libera todos os alvos inválidos antes de distribuir os novos.
-	for _, a := range ambulancias {
-		alvo := alvos[a.ID]
-		if alvo.id == 0 {
-			continue
-		}
-		posicao := a.ponto()
-		alcancavel := chamadoAlcancavel(turno, alvo.prazo, posicao.manhattan(alvo.ponto))
-		if !a.Livre || !alcancavel || !chamadosPorID.contem(alvo.id) {
-			liberarAlvo(a.ID)
+func calculaNota(chamado Chamado, ambulancia Ambulancia) float64 {
+	distanciaAteChamado := ambulancia.ponto().manhattan(chamado.ponto())
+	distanciaChamadoAteHospital := hospitalMaisProximo(chamado.ponto()).ponto().manhattan(chamado.ponto())
+
+	return float64(chamado.Valor) / float64(distanciaAteChamado+distanciaChamadoAteHospital+1)
+}
+
+func hospitalMaisProximo(ponto Ponto) Hospital {
+	melhor := hospitais[0]
+	melhorDistancia := ponto.manhattan(melhor.ponto())
+
+	for _, h := range hospitais[1:] {
+		if d := ponto.manhattan(h.ponto()); d < melhorDistancia {
+			melhor = h
+			melhorDistancia = d
 		}
 	}
 
-	for _, a := range ambulancias {
-		mov := "P"
-		if a.Livre {
-			alvo := alvos[a.ID]
-			if alvo.id == 0 {
-				chamado := chamados.buscaMelhor(a.ponto(), turno)
-				if chamado != nil {
-					chamado.AmbulanciaACaminho = true
-					alvo = alvoAmbulancia{id: chamado.ID, ponto: chamado.ponto(), prazo: chamado.Prazo}
-					alvos[a.ID] = alvo
-				}
-			}
-			if alvo.id != 0 {
-				mov = direcao(a.X, a.Y, alvo.ponto.X, alvo.ponto.Y)
-			}
-		} else {
-			melhor := 0
-			//TODO: ETAPA 1 - Armazenar hospital mais próximo
-			for i, h := range hospitais {
-				if distancia(a.X, a.Y, h.X, h.Y) < distancia(a.X, a.Y, hospitais[melhor].X, hospitais[melhor].Y) {
-					melhor = i
-				}
-			}
-			mov = direcao(a.X, a.Y, hospitais[melhor].X, hospitais[melhor].Y)
-		}
-		fmt.Fprintln(escritor, a.ID, mov)
+	return melhor
+}
+
+func chamadoEhGrave(chamado Chamado) bool {
+	limiar := 40 // chamados graves: 60 a 100 pontos
+
+	if chamado.Valor >= limiar {
+		return true
 	}
-	fmt.Fprintln(escritor, "FIM")
-	escritor.Flush()
+
+	return false
 }

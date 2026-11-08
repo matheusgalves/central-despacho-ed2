@@ -33,3 +33,4 @@ go.work.sum
 # .vscode/
 correcao/
 *.DS_Store
+docker/
