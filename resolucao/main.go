@@ -5,8 +5,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 )
 
 type Chamado struct {
@@ -84,7 +82,11 @@ func main() {
 
 		// é mais simples atualizar as ambulancias 1x por turno
 		ambulanciasServidor := inteiro(lerCampos()[1]) // AMBULANCIAS k
-		ambulancias := make([]Ambulancia, ambulanciasServidor)
+		// reaproveita o mesmo slice a cada turno em vez de alocar um novo
+		if cap(bufAmbulancias) < ambulanciasServidor {
+			bufAmbulancias = make([]Ambulancia, ambulanciasServidor)
+		}
+		ambulancias := bufAmbulancias[:ambulanciasServidor]
 
 		for i := 0; i < ambulanciasServidor; i++ {
 			ambulancias[i] = montaAmbulancia(lerCampos())
@@ -100,6 +102,8 @@ func main() {
 		jogarTurno(turno, ambulancias)
 	}
 }
+
+var bufAmbulancias []Ambulancia
 
 func jogarTurno(turno int, ambulancias []Ambulancia) {
 	for _, ambulancia := range ambulancias {
@@ -122,7 +126,7 @@ func jogarTurno(turno int, ambulancias []Ambulancia) {
 	escritor.Flush()
 }
 
-func montaChamado(campos []string) Chamado {
+func montaChamado(campos [][]byte) Chamado {
 	return Chamado{
 		ID:    inteiro(campos[0]),
 		X:     inteiro(campos[1]),
@@ -132,30 +136,66 @@ func montaChamado(campos []string) Chamado {
 	}
 }
 
-func montaAmbulancia(campos []string) Ambulancia {
+func montaAmbulancia(campos [][]byte) Ambulancia {
 	return Ambulancia{
 		ID:    inteiro(campos[0]),
 		X:     inteiro(campos[1]),
 		Y:     inteiro(campos[2]),
-		Livre: campos[3] == "LIVRE",
+		Livre: string(campos[3]) == "LIVRE", // a conversão só para comparar não aloca
 	}
 }
 
-// lerCampos lê a próxima linha da entrada e a divide em campos.
+// camposBuf é reaproveitado por lerCampos a cada linha.
+var camposBuf [][]byte
+
+// lerCampos lê a próxima linha da entrada e a divide em campos, sem alocar:
+// cada campo é uma fatia dos bytes do próprio Scanner (leitor.Bytes() não
+// copia a linha, ao contrário de leitor.Text()). Por isso o resultado só vale
+// até a próxima chamada; converta os campos antes de ler outra linha.
 // Devolve nil quando a entrada termina.
-func lerCampos() []string {
+func lerCampos() [][]byte {
 	if !leitor.Scan() {
 		return nil
 	}
-	return strings.Fields(leitor.Text())
+	linha := leitor.Bytes()
+	camposBuf = camposBuf[:0]
+	i := 0
+	for i < len(linha) {
+		for i < len(linha) && ehEspaco(linha[i]) {
+			i++
+		}
+		inicio := i
+		for i < len(linha) && !ehEspaco(linha[i]) {
+			i++
+		}
+		if i > inicio {
+			camposBuf = append(camposBuf, linha[inicio:i])
+		}
+	}
+	return camposBuf
 }
 
-func inteiro(s string) int {
-	v, err := strconv.Atoi(s)
-	if err != nil {
-		panic("número inválido na entrada: " + s)
+func ehEspaco(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\r'
+}
+
+// inteiro converte os bytes de um número decimal (com sinal opcional).
+func inteiro(campo []byte) int {
+	n, negativo := 0, false
+	for i, c := range campo {
+		if i == 0 && c == '-' {
+			negativo = true
+			continue
+		}
+		if c < '0' || c > '9' {
+			panic("número inválido na entrada: " + string(campo))
+		}
+		n = n*10 + int(c-'0')
 	}
-	return v
+	if negativo {
+		return -n
+	}
+	return n
 }
 
 // TODO: ETAPA 2 - Ajustar para considerar bloqueios
