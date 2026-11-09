@@ -25,6 +25,11 @@ type Hospital struct {
 	X, Y int
 }
 
+type destinoHospital struct {
+	hospital Hospital
+	definido bool
+}
+
 var (
 	leitor   *bufio.Scanner
 	escritor *bufio.Writer
@@ -35,6 +40,7 @@ var (
 
 	chamadosPorID hashChamados
 	expiraEm      [][]int
+	destinos      []destinoHospital
 )
 
 func main() {
@@ -109,6 +115,7 @@ func jogarTurno(turno int, ambulancias []Ambulancia) {
 	for _, ambulancia := range ambulancias {
 		mov := "P"
 		if ambulancia.Livre {
+			destinos[ambulancia.ID] = destinoHospital{}
 			melhorChamadoComum := chamadosComuns.buscaMelhor(ambulancia.ponto(), turno)
 			melhorChamadoGrave := chamadosGraves.buscaMelhor(ambulancia.ponto(), turno)
 
@@ -117,8 +124,12 @@ func jogarTurno(turno int, ambulancias []Ambulancia) {
 				mov = direcao(ambulancia.X, ambulancia.Y, escolhido.X, escolhido.Y)
 			}
 		} else {
-			hospital := hospitalMaisProximo(ambulancia.ponto())
-			mov = direcao(ambulancia.X, ambulancia.Y, hospital.X, hospital.Y)
+			destino := &destinos[ambulancia.ID]
+			if !destino.definido {
+				destino.hospital = hospitalMaisProximo(ambulancia.ponto())
+				destino.definido = true
+			}
+			mov = direcao(ambulancia.X, ambulancia.Y, destino.hospital.X, destino.hospital.Y)
 		}
 		fmt.Fprintln(escritor, ambulancia.ID, mov)
 	}
@@ -230,6 +241,7 @@ func lerInicio() {
 		hospitais = append(hospitais, Hospital{inteiro(c[0]), inteiro(c[1])})
 	}
 	k := inteiro(lerCampos()[1])
+	destinos = make([]destinoHospital, k)
 	for i := 0; i < k; i++ {
 		lerCampos() // id x y
 	}
