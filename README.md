@@ -6,10 +6,10 @@
 
 Estrutura: duas KD-Trees de 2 dimensões (x, y), uma para os chamados
 graves (valor >= 40) e outra para os comuns. A KD-Tree é uma árvore
-binária de busca que alterna a coordenada comparada a cada nível: a raiz
+binária de busca que alterna a coordenada comparada a cada nível. A raiz
 separa por x, os filhos por y, os netos por x de novo, e assim por diante.
 
-A separação em duas árvores vem do critério de escolha: a ambulância vai
+A separação em duas árvores vem para otimizar o critério de escolha, pois a ambulância vai
 ao chamado de maior nota, valor / (distância até o chamado + distância do
 chamado ao hospital mais próximo + 1). Um grave (60 a 100) vale
 mais que vários comuns (1 a 20) mesmo estando mais longe, mas o mais
@@ -22,20 +22,17 @@ Custo por turno:
   (~1 milhão de nós): profundidade média 27, o esperado para uma árvore
   montada em ordem aleatória.
 - Remover (recolhidos e graves vencidos): descer pela posição até achar o
-  id, O(log n) esperado; se o nó tem filhos, ele é trocado pelo mínimo da
+  id, O(log n) esperado. Se o nó tem filhos, ele é trocado pelo mínimo da
   coordenada do nível numa das subárvores, o que pode visitar parte dela.
   Os comuns vencidos não são removidos (ver a seção de expiração).
 - Achar o chamado mais próximo de uma ambulância:
   1) descer primeiro pelo lado da consulta, guardando o melhor candidato
-     (prazo ainda alcançável e não reservado neste turno);
-  2) na volta, só visitar o outro lado se a distância até que o corte esperado
-     seja menor que a do melhor candidato (poda);
-  3) na árvore de graves, a busca começa com um limite de distância: se o
-     melhor comum tem nota n, um grave a mais de 100/n células nunca ganha
-     dele, então esses ramos nem são visitados.
+     (o que ainda dá para alcançar dentro do prazo);
+  2) na volta, só visitar o outro lado se a distância até o plano de corte
+     for menor que a do melhor candidato (poda).
   Custo: O(log n) típico (medido: ~45 nós visitados por busca). O pior
-  caso é O(n), quando nenhum nó passa nos filtros e a poda nunca dispara;
-  o limite e a remoção dos graves vencidos vão evitar esse caso na prática.
+  caso é O(n), quando nenhum nó passa no filtro de prazo e a poda nunca
+  dispara; a remoção dos graves vencidos evita esse caso na prática.
 
 Alternativa descartada: BST comum (ou AVL) ordenada por uma coordenada,
 por exemplo x. A distância de Manhattan depende das duas coordenadas: um
@@ -93,28 +90,43 @@ descida até o nó certo.
 
 ## Evitar que duas ambulâncias da equipe sigam para o mesmo chamado
 
-Estrutura: campo de reserva em cada chamado (no próprio nó da árvore),
-mais uma lista com os chamados reservados no turno.
+Decisão: não evitar. Cada ambulância livre escolhe seu alvo de forma
+independente, e duas podem seguir para o mesmo chamado.
 
-Custo por turno: as ambulâncias são processadas uma por vez. O chamado
-escolhido é marcado (O(1), pois a busca devolve um ponteiro para o nó),
-e as buscas das ambulâncias seguintes ignoram os marcados. No fim do
-turno, todas as marcas são apagadas (O(ambulâncias)) e, no turno
-seguinte, tudo é reavaliado.
+Por que funciona: o alvo é reavaliado a cada turno, então a ambulância
+que perde a disputa só desperdiça os turnos já andados e quando o chamado
+aparece em RECOLHIDOS, ela escolhe outro. As disputas são quase sempre
+por graves (~96% no estresse), e os graves se concentram em torno de
+alguns pontos do mapa. Por isso, a perdedora já está perto de outros
+graves, e a disputa custa pouco.
 
-Alternativa descartada: guardar o alvo de cada ambulância entre turnos.
-Medido no medio, essa versão fez ~30% menos pontos que o bot ingênuo, pois a
-ambulância seguia para o alvo antigo e ignorava os chamados novos que
-surgiam mais perto no caminho.
+Custo por turno: nenhum além das buscas de cada ambulância.
+
+Alternativa descartada: reservar o chamado escolhido durante o turno
+(campo de reserva no nó, ignorado pelas buscas seguintes e apagado no fim
+do turno). Medido: +2,7% de pontos no medio e nenhum ganho no estresse.
+Com a reserva, o bot recolheu ~20% mais chamados, mas cada um valeu ~18%
+menos: a perdedora era desviada para um comum próximo, em vez de seguir
+perto dos graves. A busca também ficava mais cara, pois ia mais longe
+quando o melhor grave estava reservado.
+
+Também descartado: guardar o alvo de cada ambulância entre turnos
+(~30% menos pontos que o ingênuo no medio, porque a ambulância ignorava
+os chamados novos que surgiam mais perto no caminho).
 
 ## Achar o hospital mais próximo de uma ambulância ocupada
 
-Estrutura: slice (lista) com as coordenadas dos hospitais, lido no INICIO.
+Estrutura: slice (lista) com as coordenadas dos hospitais, lido no INICIO,
+mais o hospital de destino de cada ambulância (indexado pelo id dela).
 
-Custo por turno: varrer os H hospitais (H <= 20) e escolher o de menor
-distância, O(H). Isso é feito para cada ambulância ocupada e, na nota,
-para os dois candidatos (comum e grave) de cada ambulância livre. No
-estresse são no máximo 100 ambulâncias x 2 x 20 comparações por turno.
+Custo por turno: quando uma ambulância fica ocupada, varrer os H
+hospitais (H <= 20) e guardar o de menor distância como destino dela,
+O(H). Nos turnos seguintes ela só segue para o destino guardado, O(1): na
+grade aberta, o hospital escolhido continua sendo o mais próximo durante
+o trajeto. O destino é apagado quando ela volta a ficar livre. A nota
+também varre os hospitais para os dois candidatos (comum e grave) de cada
+ambulância livre: no estresse, no máximo 100 ambulâncias x 2 x 20
+comparações por turno.
 
 Alternativa descartada: calcular o hospital mais próximo de cada chamado
 na inserção. Também é O(H), mas para os ~1000 chamados novos de cada turno
