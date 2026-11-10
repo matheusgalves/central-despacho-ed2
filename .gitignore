@@ -34,3 +34,6 @@ go.work.sum
 correcao/
 *.DS_Store
 docker/
+*.zip
+entrega_etapa1
+entrega_etapa2
