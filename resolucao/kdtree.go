@@ -1,5 +1,7 @@
 package main
 
+const DIMENSOES = 2
+
 type Ponto struct {
 	X, Y int
 }
@@ -37,10 +39,6 @@ type KDTree struct {
 	raiz *No
 }
 
-const DIMENSOES = 2
-
-// buscaMelhor devolve o chamado alcançável e sem reserva mais próximo.
-// O ponteiro permite reservar o chamado antes da próxima consulta.
 func (arvore *KDTree) buscaMelhor(consulta Ponto, turno int) *Chamado {
 	melhor := buscaMaisProximoRecursivo(arvore.raiz, consulta, turno, 0, nil)
 	if melhor == nil {
@@ -49,18 +47,16 @@ func (arvore *KDTree) buscaMelhor(consulta Ponto, turno int) *Chamado {
 	return &melhor.chamado
 }
 
-func chamadoAlcancavel(turno, prazo, distancia int) bool {
-	// O movimento deste turno já conta. Distância zero também exige prazo válido.
-	return prazo >= turno && distancia <= prazo-turno+1
-}
-
 func (arvore *KDTree) insere(chamado Chamado) {
 	arvore.raiz = insereRecursivo(arvore.raiz, chamado, 0)
 }
 
-// remove retira o chamado de mesmo ID (a posição guia a descida).
 func (arvore *KDTree) remove(chamado Chamado) {
 	arvore.raiz = removeRecursivo(arvore.raiz, chamado, 0)
+}
+
+func chamadoAlcancavel(turno, prazo, distancia int) bool {
+	return prazo >= turno && distancia <= prazo-turno+1
 }
 
 func buscaMaisProximoRecursivo(no *No, consulta Ponto, turno, profundidade int, melhor *No) *No {
@@ -69,12 +65,11 @@ func buscaMaisProximoRecursivo(no *No, consulta Ponto, turno, profundidade int, 
 	}
 
 	distancia := no.chamado.ponto().manhattan(consulta)
-	if !no.chamado.AmbulanciaACaminho && chamadoAlcancavel(turno, no.chamado.Prazo, distancia) &&
+	if chamadoAlcancavel(turno, no.chamado.Prazo, distancia) &&
 		(melhor == nil || distancia < melhor.chamado.ponto().manhattan(consulta)) {
 		melhor = no
 	}
 
-	// 2. desce primeiro pelo lado onde a consulta está
 	eixo := profundidade % DIMENSOES
 	diferenca := consulta.valorDoEixo(eixo) - no.chamado.ponto().valorDoEixo(eixo)
 
@@ -85,8 +80,6 @@ func buscaMaisProximoRecursivo(no *No, consulta Ponto, turno, profundidade int, 
 
 	melhor = buscaMaisProximoRecursivo(proximo, consulta, turno, profundidade+1, melhor)
 
-	// 3. só visita o outro lado se o plano de corte estiver mais perto
-	// do que o melhor já encontrado
 	if melhor == nil || abs(diferenca) < melhor.chamado.ponto().manhattan(consulta) {
 		melhor = buscaMaisProximoRecursivo(oposto, consulta, turno, profundidade+1, melhor)
 	}
@@ -128,7 +121,7 @@ func removeRecursivo(no *No, chamado Chamado, profundidade int) *No {
 			no.dir = removeRecursivo(no.esq, minimo.chamado, profundidade+1)
 			no.esq = nil
 		} else {
-			return nil // folha
+			return nil
 		}
 	} else if chamado.ponto().valorDoEixo(eixoAtual) < no.chamado.ponto().valorDoEixo(eixoAtual) {
 		no.esq = removeRecursivo(no.esq, chamado, profundidade+1)
@@ -147,7 +140,6 @@ func acharMinimo(no *No, eixo int, profundidade int) *No {
 	eixoAtual := profundidade % DIMENSOES
 
 	if eixoAtual == eixo {
-		// o mínimo só pode estar à esquerda; sem esquerda, é o próprio nó
 		if no.esq == nil {
 			return no
 		}

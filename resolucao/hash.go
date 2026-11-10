@@ -1,5 +1,3 @@
-// Adaptado de lab/tabela/tabela.go e lab/tabela/exercicios.go.
-// Usa endereçamento aberto com sondagem linear e remoção sem lápides.
 package main
 
 type hashChamados struct {
@@ -29,22 +27,16 @@ func (t *hashChamados) hash(k int) int {
 	return h
 }
 
-// distancia conta os passos da sondagem de de até ate, inclusive a volta no fim do slice.
 func (t *hashChamados) distancia(de, ate int) int {
 	return (ate - de + t.m()) % t.m()
 }
 
-// posicao devolve a posição da chave ou a primeira posição vazia da sondagem.
 func (t *hashChamados) posicao(k int) int {
 	p := t.hash(k)
 	for t.ocupada[p] && t.chaves[p] != k {
 		p = (p + 1) % t.m()
 	}
 	return p
-}
-
-func (t *hashChamados) contem(k int) bool {
-	return t.m() != 0 && t.ocupada[t.posicao(k)]
 }
 
 func (t *hashChamados) insere(k int, v Ponto) {
@@ -78,7 +70,6 @@ func (t *hashChamados) redimensiona(m int) {
 	*t = nova
 }
 
-// retira devolve as coordenadas e recompõe a sequência da sondagem.
 func (t *hashChamados) retira(k int) (Ponto, bool) {
 	if t.m() == 0 {
 		return Ponto{}, false
